@@ -4,7 +4,7 @@ import pytz
 from apscheduler.schedulers.background import BackgroundScheduler
 from logging_config import logger
 from config import Config
-from update_scheduler import combined_update_stocks_sync
+from update_scheduler import update_taiwan_stocks_sync, update_us_stocks_sync
 
 def main():
     """主程式入口"""
@@ -14,8 +14,11 @@ def main():
         
         logger.info("開始啟動股票價格更新服務")
         scheduler = BackgroundScheduler(timezone=pytz.timezone("Asia/Taipei"))
-        # 排程採用同步包裝後的非同步更新函數
-        scheduler.add_job(combined_update_stocks_sync, "interval", minutes=1, id="combined_stock_update")
+        # 台股每2分鐘更新一次
+        scheduler.add_job(update_taiwan_stocks_sync, "interval", minutes=2, id="taiwan_stock_update")
+        # 美股每5分鐘更新一次
+        scheduler.add_job(update_us_stocks_sync, "interval", minutes=5, id="us_stock_update")
+        
         scheduler.start()
         logger.info("APScheduler 已啟動, 等待排程觸發...")
 

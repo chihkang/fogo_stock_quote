@@ -6,46 +6,77 @@ from stock_service import (
 )
 from trading_time import is_trading_time_taiwan, is_trading_time_us
 
-async def process_stock(symbol):
-    if symbol[0].isdigit():
-        if is_trading_time_taiwan():
-            logger.info(f"更新台股 {symbol}")
-            price = await fetch_taiwan_stock_quote(symbol)
-        else:
-            logger.info(f"台股 {symbol} 非交易時間, 略過")
-            return
-    else:
-        if is_trading_time_us():
-            logger.info(f"更新美股 {symbol}")
-            price = await fetch_us_stock_quote(symbol)
-        else:
-            logger.info(f"美股 {symbol} 非交易時間, 略過")
-            return
-
-    if price is not None:
-        stock_id = await get_stock_id(symbol)
-        if stock_id is not None:
-            await update_stock_price(symbol, stock_id, price)
-        else:
-            logger.error(f"{symbol} 的 stock_id 為 None, 無法更新")
-    else:
-        logger.error(f"{symbol} 無法取得股價, 略過更新")
-
-async def combined_update_stocks():
-    """合併更新台股和美股價格 (非同步)"""
-    logger.info("=== 開始合併更新股票價格 ===")
+async def update_taiwan_stocks():
+    """非同步更新台股價格"""
+    logger.info("=== 開始更新台股價格 ===")
     stocks = await fetch_stock_list()
     if not stocks:
-        logger.warning("股票清單為空, 跳過此次更新")
+        logger.warning("股票清單為空, 跳過台股更新")
         return
 
-    tasks = [process_stock(symbol) for symbol in stocks]
-    await asyncio.gather(*tasks)
-    logger.info("=== 合併更新股票價格完成 ===")
+    tasks = []
+    for symbol in stocks:
+        if symbol[0].isdigit():
+            if is_trading_time_taiwan():
+                logger.info(f"台股: 更新 {symbol}")
+                # 用台股 API 取得價格
+                async def process(symbol=symbol):
+                    price = await fetch_taiwan_stock_quote(symbol)
+                    if price is not None:
+                        stock_id = await get_stock_id(symbol)
+                        if stock_id is not None:
+                            await update_stock_price(symbol, stock_id, price)
+                        else:
+                            logger.error(f"{symbol} 的 stock_id 為 None, 無法更新")
+                    else:
+                        logger.error(f"{symbol} 無法取得股價, 略過更新")
+                tasks.append(process())
+            else:
+                logger.info(f"台股: {symbol} 非交易時間, 略過")
+    if tasks:
+        await asyncio.gather(*tasks)
+    logger.info("=== 台股更新完成 ===")
 
-def combined_update_stocks_sync():
+async def update_us_stocks():
+    """非同步更新美股價格"""
+    logger.info("=== 開始更新美股價格 ===")
+    stocks = await fetch_stock_list()
+    if not stocks:
+        logger.warning("股票清單為空, 跳過美股更新")
+        return
+
+    tasks = []
+    for symbol in stocks:
+        if not symbol[0].isdigit():
+            if is_trading_time_us():
+                logger.info(f"美股: 更新 {symbol}")
+                async def process(symbol=symbol):
+                    price = await fetch_us_stock_quote(symbol)
+                    if price is not None:
+                        stock_id = await get_stock_id(symbol)
+                        if stock_id is not None:
+                            await update_stock_price(symbol, stock_id, price)
+                        else:
+                            logger.error(f"{symbol} 的 stock_id 為 None, 無法更新")
+                    else:
+                        logger.error(f"{symbol} 無法取得股價, 略過更新")
+                tasks.append(process())
+            else:
+                logger.info(f"美股: {symbol} 非交易時間, 略過")
+    if tasks:
+        await asyncio.gather(*tasks)
+    logger.info("=== 美股更新完成 ===")
+
+def update_taiwan_stocks_sync():
     """
-    提供給 APScheduler 調用的同步介面，
-    內部透過 asyncio.run 處理非同步邏輯
+    提供 APScheduler 調用的同步介面，
+    內部透過 asyncio.run 執行非同步台股更新
     """
-    asyncio.run(combined_update_stocks())
+    asyncio.run(update_taiwan_stocks())
+
+def update_us_stocks_sync():
+    """
+    提供 APScheduler 調用的同步介面，
+    內部透過 asyncio.run 執行非同步美股更新
+    """
+    asyncio.run(update_us_stocks())
