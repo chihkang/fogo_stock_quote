@@ -24,15 +24,19 @@ cd fogo_stock_quote
 
 使用 pip 建立虛擬環境（建議使用 [venv](https://docs.python.org/3/library/venv.html)）：
 
+```bash
 python -m venv venv
 
 source venv/bin/activate  # Linux/macOS
 
 venv\Scripts\activate    # Windows
+```
 
 然後使用 pip 安裝必要套件：
 
+```bash
 pip install -r requirements.txt
+```
 
 ### **3. 配置環境變數** 🔑
 
