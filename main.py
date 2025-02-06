@@ -7,19 +7,16 @@ from logging import StreamHandler
 from apscheduler.schedulers.background import BackgroundScheduler
 import pytz
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # -----------------------------
 # 從環境變數讀取設定 (部署時請配置 .env 或平台環境變數)
 # -----------------------------
-MINIMAL_API_URL = os.environ.get(
-    "MINIMAL_API_URL")
-FUGLE_API_KEY = os.environ.get(
-    "FUGLE_API_KEY")
-FINNHUB_API_TOKEN = os.environ.get(
-    "FINNHUB_API_TOKEN")
-UPDATE_API_URL = os.environ.get(
-    "UPDATE_API_URL")
+MINIMAL_API_URL = os.environ.get("MINIMAL_API_URL")
+FUGLE_API_KEY = os.environ.get("FUGLE_API_KEY")
+FINNHUB_API_TOKEN = os.environ.get("FINNHUB_API_TOKEN")
+UPDATE_API_URL = os.environ.get("UPDATE_API_URL")
 
 # -----------------------------
 # 日誌設定
@@ -131,7 +128,7 @@ def update_stock_price(symbol, stock_id, price):
 
 def fetch_stock_list():
     """
-    從 minimal API 取得股票清單，回傳所有股票代碼（台股為數字，美股為英文字母）
+    從 minimal API 取得股票清單，回傳所有股票代碼
     """
     try:
         response = requests.get(MINIMAL_API_URL)
@@ -139,7 +136,7 @@ def fetch_stock_list():
             data = response.json()
             stocks = []
             for item in data:
-                # 以 ":" 分割，取出左側的 symbol（可能為數字或英文字母）
+                # 以 ":" 分割，取出左側的 symbol
                 parts = item["name"].split(":")
                 symbol = parts[0].strip()
                 if symbol:
@@ -175,6 +172,7 @@ def get_stock_id(symbol):
 
 # -----------------------------
 # 合併更新任務，每次從 API 讀取股票清單並更新符合條件的股票
+# 判斷方式：若代號第一個字元為數字，視為台股；否則視為美股。
 # -----------------------------
 def combined_update_stocks():
     logger.info("=== 開始合併更新股票價格 ===")
@@ -184,7 +182,8 @@ def combined_update_stocks():
         return
 
     for symbol in stocks:
-        if symbol.isdigit():
+        # 判斷依據：只要第一個字元是數字，就視為台股
+        if symbol[0].isdigit():
             if is_trading_time_taiwan():
                 logger.info(f"更新台股 {symbol}")
                 price = fetch_taiwan_stock_quote(symbol)
