@@ -65,11 +65,19 @@ async def _update_stocks(stock_type: str, is_trading_time_func, fetch_stock_quot
 
 async def update_taiwan_stocks():
     """非同步更新台股價格"""
-    await _update_stocks("台股", is_trading_time_taiwan, fetch_taiwan_stock_quote)
+    try:
+        await _update_stocks("台股", is_trading_time_taiwan, fetch_taiwan_stock_quote)
+    finally:
+        from stock_service import close_client_session
+        await close_client_session()
 
 async def update_us_stocks():
     """非同步更新美股價格"""
-    await _update_stocks("美股", is_trading_time_us, fetch_us_stock_quote)
+    try:
+        await _update_stocks("美股", is_trading_time_us, fetch_us_stock_quote)
+    finally:
+        from stock_service import close_client_session
+        await close_client_session()
 
 def update_taiwan_stocks_sync():
     """

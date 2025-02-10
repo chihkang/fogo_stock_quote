@@ -12,14 +12,10 @@ class StockServiceError(Exception):
 client_session = None
 
 async def get_client_session():
-    global client_session
-    if client_session is None:
-        client_session = aiohttp.ClientSession()
-    return client_session
+    pass
 
 async def close_client_session():
-    if client_session:
-        await client_session.close()
+    pass
 
 def get_client_timeout():
     """根據 Config.REQUEST_TIMEOUT 回傳 aiohttp.ClientTimeout 物件"""
@@ -30,22 +26,25 @@ async def _fetch_stock_quote(symbol, url, headers=None):
     """非同步呼叫 API 取得股票 symbol 的即時股價"""
     try:
         timeout = get_client_timeout()
-        session = await get_client_session()
-        async with session.get(url, headers=headers, timeout=timeout) as response:
-            if response.status == 200:
-                data = await response.json()
-                if "lastPrice" in data:
-                    price = data.get("lastPrice")
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=timeout) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if "lastPrice" in data:
+                        price = data.get("lastPrice")
+                    else:
+                        price = data.get("c")
+                    logger.info(f"{symbol} 現在股價: {price}")
+                    return price
                 else:
-                    price = data.get("c")
-                logger.info(f"{symbol} 現在股價: {price}")
-                return price
-            else:
-                logger.error(f"API 呼叫錯誤, 狀態碼: {response.status}")
-                raise StockServiceError(f"API 呼叫錯誤, 狀態碼: {response.status}")
+                    logger.error(f"API 呼叫錯誤, 狀態碼: {response.status}")
+                    raise StockServiceError(f"API 呼叫錯誤, 狀態碼: {response.status}")
     except asyncio.TimeoutError:
         logger.error(f"取得 {symbol} 股價超時")
         raise StockServiceError(f"取得 {symbol} 股價超時")
+    except aiohttp.client_exceptions.ClientConnectorDNSError as e:
+        logger.error(f"無法連接到 API 主機: {e}")
+        raise StockServiceError(f"無法連接到 API 主機: {e}")
     except StockServiceError as e:
         raise e
     except Exception as e:
@@ -68,13 +67,13 @@ async def update_stock_price(symbol, stock_id, price):
     url = f"{UPDATE_API_URL}/{stock_id}/price?newPrice={price}"
     try:
         timeout = get_client_timeout()
-        session = await get_client_session()
-        async with session.put(url, timeout=timeout) as response:
-            if response.status == 200:
-                logger.info(f"成功更新 {symbol} (ID: {stock_id}) 股價為 {price}")
-            else:
-                logger.error(f"更新 {symbol} 股價失敗, 狀態碼: {response.status}")
-                raise StockServiceError(f"更新 {symbol} 股價失敗, 狀態碼: {response.status}")
+        async with aiohttp.ClientSession() as session:
+            async with session.put(url, timeout=timeout) as response:
+                if response.status == 200:
+                    logger.info(f"成功更新 {symbol} (ID: {stock_id}) 股價為 {price}")
+                else:
+                    logger.error(f"更新 {symbol} 股價失敗, 狀態碼: {response.status}")
+                    raise StockServiceError(f"更新 {symbol} 股價失敗, 狀態碼: {response.status}")
     except asyncio.TimeoutError:
         logger.error(f"更新 {symbol} 股價超時")
         raise StockServiceError(f"更新 {symbol} 股價超時")
@@ -89,25 +88,29 @@ async def fetch_stock_data():
     """非同步從 minimal API 取得股票清單和 stock_id"""
     try:
         timeout = get_client_timeout()
-        session = await get_client_session()
-        async with session.get(MINIMAL_API_URL, timeout=timeout) as response:
-            if response.status == 200:
-                data = await response.json()
-                stock_data = []
-                for item in data:
-                    match = re.match(r"([^:]+):", item["name"])
-                    if match:
-                        symbol = match.group(1).strip()
-                        if symbol:
-                            stock_data.append({
-                                "symbol": symbol,
-                                "_id": item["_id"]
-                            })
-                logger.info(f"取得 {len(stock_data)} 檔股票清單")
-                return stock_data
-            else:
-                logger.error(f"取得股票清單失敗, 狀態碼: {response.status}")
-                raise StockServiceError(f"取得股票清單失敗, 狀態碼: {response.status}")
+        async with aiohttp.ClientSession() as session:
+            response = await session.get(MINIMAL_API_URL, timeout=timeout)
+            if response is None:
+                logger.error("API 呼叫失敗, response 為 None")
+                raise StockServiceError("API 呼叫失敗, response 為 None")
+            async with response:
+                if response.status == 200:
+                    data = await response.json()
+                    stock_data = []
+                    for item in data:
+                        match = re.match(r"([^:]+):", item["name"])
+                        if match:
+                            symbol = match.group(1).strip()
+                            if symbol:
+                                stock_data.append({
+                                    "symbol": symbol,
+                                    "_id": item["_id"]
+                                })
+                    logger.info(f"取得 {len(stock_data)} 檔股票清單")
+                    return stock_data
+                else:
+                    logger.error(f"取得股票清單失敗, 狀態碼: {response.status}")
+                    raise StockServiceError(f"取得股票清單失敗, 狀態碼: {response.status}")
     except asyncio.TimeoutError:
         logger.error("取得股票清單超時")
         raise StockServiceError("取得股票清單超時")
