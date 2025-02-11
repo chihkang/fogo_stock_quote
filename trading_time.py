@@ -35,12 +35,11 @@ def is_trading_time_us():
     美股交易時間為台北時間 22:30 - 隔日 5:00 (冬令時間)
     夏令時間則提前一小時,為 21:30 - 隔日 4:00
     """
-    eastern_tz = pytz.timezone('US/Eastern')
-    now_utc = datetime.datetime.utcnow()
-    now_eastern = now_utc.replace(tzinfo=pytz.utc).astimezone(eastern_tz)
+    taipei_tz = pytz.timezone('Asia/Taipei')
+    now_taipei = datetime.datetime.now(taipei_tz)
 
     # 檢查是否為週末
-    if now_eastern.weekday() >= 5:
+    if now_taipei.weekday() >= 5:
         logger.debug("美股: 今天為週末,不屬於交易日")
         return False
 
@@ -52,8 +51,13 @@ def is_trading_time_us():
     start_time_summer = datetime.time(21, 30)
     end_time_summer = datetime.time(4, 0)
 
-    # 判斷是否為夏令時間
-    is_dst = now_eastern.dst() != datetime.timedelta(0)
+    # 判斷是否為夏令時間 (美股夏令時間與台北不同, 需要額外判斷)
+    # 美股夏令時間為每年三月的第二個星期日到十一月的第一個星期日
+    dst_start = datetime.datetime(now_taipei.year, 3, 8) + datetime.timedelta(days=(6 - dst_start.weekday()) % 7)
+    dst_start += datetime.timedelta(days=7)
+    dst_end = datetime.datetime(now_taipei.year, 11, 1) + datetime.timedelta(days=(6 - dst_end.weekday()) % 7)
+
+    is_dst = dst_start <= now_taipei <= dst_end
 
     if is_dst:
         start_time = start_time_summer
@@ -62,4 +66,4 @@ def is_trading_time_us():
         start_time = start_time_winter
         end_time = end_time_winter
 
-    return _is_trading_time("US/Eastern", start_time, end_time)
+    return _is_trading_time("Asia/Taipei", start_time, end_time)
