@@ -15,6 +15,7 @@ async def _load_stock_list():
     """從檔案或 API 載入股票清單"""
     try:
         with open(STOCK_LIST_FILE, "r") as f:
+            logger.info(f"從 {STOCK_LIST_FILE} 讀取股票清單")
             return json.load(f)
     except FileNotFoundError:
         logger.info("股票清單檔案不存在, 從 API 獲取")
@@ -26,6 +27,9 @@ async def _load_stock_list():
         else:
             logger.warning("無法從 API 獲取股票清單")
             return []
+    except Exception as e:
+        logger.error(f"讀取 {STOCK_LIST_FILE} 發生錯誤: {e}")
+        return []
 
 async def _update_stocks(stock_type: str, is_trading_time_func, fetch_stock_quote_func):
     """非同步更新股票價格"""

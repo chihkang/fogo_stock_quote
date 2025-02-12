@@ -89,36 +89,41 @@ async def fetch_stock_data():
     try:
         timeout = get_client_timeout()
         async with aiohttp.ClientSession() as session:
-            response = await session.get(MINIMAL_API_URL, timeout=timeout)
-            if response is None:
-                logger.error("API 呼叫失敗, response 為 None")
-                raise StockServiceError("API 呼叫失敗, response 為 None")
-            async with response:
-                if response.status == 200:
-                    data = await response.json()
-                    stock_data = []
-                    for item in data:
-                        match = re.match(r"([^:]+):", item["name"])
-                        if match:
-                            symbol = match.group(1).strip()
-                            if symbol:
-                                stock_data.append({
-                                    "symbol": symbol,
-                                    "_id": item["_id"]
-                                })
-                    logger.info(f"取得 {len(stock_data)} 檔股票清單")
-                    return stock_data
-                else:
-                    logger.error(f"取得股票清單失敗, 狀態碼: {response.status}")
-                    raise StockServiceError(f"取得股票清單失敗, 狀態碼: {response.status}")
-    except asyncio.TimeoutError:
-        logger.error("取得股票清單超時")
-        raise StockServiceError("取得股票清單超時")
-    except StockServiceError as e:
-        raise e
+            try:
+                response = await session.get(MINIMAL_API_URL, timeout=timeout)
+                if response is None:
+                    logger.error("API 呼叫失敗, response 為 None")
+                    return None
+                async with response:
+                    if response.status == 200:
+                        data = await response.json()
+                        stock_data = []
+                        for item in data:
+                            match = re.match(r"([^:]+):", item["name"])
+                            if match:
+                                symbol = match.group(1).strip()
+                                if symbol:
+                                    stock_data.append({
+                                        "symbol": symbol,
+                                        "_id": item["_id"]
+                                    })
+                        logger.info(f"取得 {len(stock_data)} 檔股票清單")
+                        return stock_data
+                    else:
+                        logger.error(f"取得股票清單失敗, 狀態碼: {response.status}")
+                        return None
+            except asyncio.TimeoutError:
+                logger.error("取得股票清單超時")
+                return None
+            except aiohttp.ClientError as e:
+                logger.error(f"取得股票清單發生網路錯誤: {e}")
+                return None
+            except Exception as e:
+                logger.error(f"取得股票清單發生錯誤: {e}", exc_info=True)
+                return None
     except Exception as e:
-        logger.error(f"取得股票清單發生錯誤: {e}", exc_info=True)
-        raise StockServiceError(f"取得股票清單發生錯誤: {e}")
+        logger.error(f"fetch_stock_data 發生未預期錯誤: {e}")
+        return None
 
 async def get_stock_id(symbol):
     """非同步根據 symbol 從 minimal API 取得對應的 _id"""
