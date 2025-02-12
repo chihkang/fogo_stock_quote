@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 from logging_config import logger
 from stock_service import (
     fetch_taiwan_stock_quote, fetch_us_stock_quote,

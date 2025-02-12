@@ -53,9 +53,11 @@ def is_trading_time_us():
 
     # 判斷是否為夏令時間 (美股夏令時間與台北不同, 需要額外判斷)
     # 美股夏令時間為每年三月的第二個星期日到十一月的第一個星期日
-    dst_start = datetime.datetime(now_taipei.year, 3, 8) + datetime.timedelta(days=(6 - dst_start.weekday()) % 7)
-    dst_start += datetime.timedelta(days=7)
-    dst_end = datetime.datetime(now_taipei.year, 11, 1) + datetime.timedelta(days=(6 - dst_end.weekday()) % 7)
+    dst_start = taipei_tz.localize(datetime.datetime(now_taipei.year, 1, 1))  # 初始化 dst_start
+    if now_taipei.month < 3 or (now_taipei.month == 3 and now_taipei.day < 8):
+        dst_start = taipei_tz.localize(datetime.datetime(now_taipei.year, 3, 8)) + datetime.timedelta(days=(6 - datetime.datetime(now_taipei.year, 3, 8).weekday()) % 7)
+        dst_start += datetime.timedelta(days=7)
+    dst_end = taipei_tz.localize(datetime.datetime(now_taipei.year, 11, 1)) + datetime.timedelta(days=(6 - datetime.datetime(now_taipei.year, 11, 1).weekday()) % 7)
 
     is_dst = dst_start <= now_taipei <= dst_end
 
@@ -66,4 +68,27 @@ def is_trading_time_us():
         start_time = start_time_winter
         end_time = end_time_winter
 
-    return _is_trading_time("Asia/Taipei", start_time, end_time)
+    is_trading = _is_trading_time("Asia/Taipei", start_time, end_time)
+
+    if not is_trading:
+        now_taipei_time = now_taipei.time()
+        if start_time < end_time:
+            if now_taipei_time < start_time:
+                next_trading_time = datetime.datetime.combine(now_taipei.date(), start_time, tzinfo=taipei_tz)
+            elif now_taipei_time > end_time:
+                next_trading_time = datetime.datetime.combine(now_taipei.date() + datetime.timedelta(days=1), start_time, tzinfo=taipei_tz)
+            else:
+                next_trading_time = datetime.datetime.combine(now_taipei.date(), end_time, tzinfo=taipei_tz)
+        else:
+            if now_taipei_time < end_time:
+                next_trading_time = datetime.datetime.combine(now_taipei.date(), end_time, tzinfo=taipei_tz)
+            elif now_taipei_time > start_time:
+                next_trading_time = datetime.datetime.combine(now_taipei.date() + datetime.timedelta(days=1), end_time, tzinfo=taipei_tz)
+            else:
+                next_trading_time = datetime.datetime.combine(now_taipei.date(), end_time, tzinfo=taipei_tz)
+        time_diff = next_trading_time - now_taipei
+        hours, remainder = divmod(time_diff.total_seconds(), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        logger.info(f"距離美股開盤還有 {int(hours)} 小時 {int(minutes)} 分鐘")
+
+    return is_trading
